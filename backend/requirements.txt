@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pgvector
+python-dotenv
+python-multipart
+apscheduler
+pydantic
+groq
+google-genai
+ollama
+tzdata
