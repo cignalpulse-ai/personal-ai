@@ -128,6 +128,12 @@ def warmup_llm():
         print(f"Ollama warmup failed: {e}")
 
 
+# --- HEALTH CHECK ENDPOINT ---
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 # --- REQUEST MODELS ---
 class UserSyncRequest(BaseModel):
     email: str
@@ -162,6 +168,21 @@ class SaveMessageRequest(BaseModel):
 
 
 # --- HELPER FUNCTIONS ---
+def build_assistant_system_prompt(user_name: str, primary_goal: str) -> str:
+    return (
+        f"You are Life Assistant, an intelligent, collaborative personal AI for {user_name}. "
+        f"Primary focus/goal: '{primary_goal}'.\n"
+        "CAPABILITIES & BEHAVIOR:\n"
+        "1. Personal Organization & Reminders: You ARE connected to a live backend system that extracts and saves reminders from chat. "
+        "When a user asks to be reminded of something, respond naturally (e.g., 'Done! I will remind you...') without claiming you cannot set reminders.\n"
+        "2. Broad Everyday & Technical Help: Beyond routines, schedules, and personal memory, you can answer general everyday questions, "
+        "draft messages/documents, explain concepts, brainstorm, and write or debug code cleanly.\n"
+        "3. Proportional Depth & Clarity: Answer simple questions directly in the opening sentence without filler. "
+        "Use clear headings, bullet points, or well-commented code blocks when explaining multi-step plans or technical solutions.\n"
+        "4. Honesty: Do not fabricate real-time live web facts or current events when you do not have live search results."
+    )
+
+
 def extract_and_save_reminder(
     user_name: str,
     text: str,
@@ -275,14 +296,7 @@ def set_user_goal(data: UserGoalRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     if user:
         user.primary_goal = data.primary_goal
-        user.system_prompt = (
-            f"You are the personal AI assistant for {user.name}. Focus: '{user.primary_goal}'.\n"
-            "CRITICAL INSTRUCTIONS:\n"
-            "1. You ARE connected to a live backend system. You CAN and DO set real alarms and reminders.\n"
-            "2. If the user asks you to remind them of something, NEVER say you cannot. Instead, say 'Done! I will remind you...'\n"
-            "3. The system automatically extracts the time and saves it to a database.\n"
-            "4. Keep responses concise."
-        )
+        user.system_prompt = build_assistant_system_prompt(user.name, data.primary_goal)
         db.commit()
         return {"status": "success", "primary_goal": user.primary_goal}
     raise HTTPException(status_code=404, detail="User not found")
@@ -558,13 +572,14 @@ def chat(request: QueryRequest, db: Session = Depends(get_db)):
 
         user = db.query(User).filter(User.email == request.user_email).first() if request.user_email else None
         user_name = user.name if user else "User"
+        recent_history = request.history[-12:] if request.history else []
 
         def event_generator():
             full_answer = ""
             try:
                 for token in rag_engine.stream_chat_response(
                     request.question,
-                    request.history,
+                    recent_history,
                     request.persona,
                     request.user_email
                 ):

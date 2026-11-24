@@ -9,6 +9,7 @@ import MemoryManager from '@/components/MemoryManager';
 import Settings, { ChatSettings, DEFAULT_SETTINGS } from '@/components/Settings';
 import Reminders from '@/components/Reminders';
 import LoginCard from '@/components/LoginCard';
+import OnboardingTour from '@/components/OnboardingTour';
 import { API_URL } from "@/lib/api";
 
 function AppContent() {
@@ -19,6 +20,8 @@ function AppContent() {
   const [goalInput, setGoalInput] = useState("");
   const [isSyncing, setIsSyncing] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const [starterPrompt, setStarterPrompt] = useState("");
 
   const [activeTab, setActiveTab] = useState<'chat' | 'memory' | 'settings' | 'reminders'>('chat');
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
@@ -37,6 +40,7 @@ function AppContent() {
     if (!userEmail) {
       syncedEmailRef.current = null;
       setHasGoal(false);
+      setShowTour(false);
       setIsSyncing(false);
       return;
     }
@@ -96,6 +100,27 @@ function AppContent() {
     };
   }, [userEmail, userName, status]);
 
+  // Show guided tour once per user after goal setup
+  useEffect(() => {
+    if (!userEmail || !hasGoal || isSyncing) return;
+    const tourKey = `life_assistant_tour_seen_${userEmail}`;
+    if (!localStorage.getItem(tourKey)) {
+      setShowTour(true);
+    }
+  }, [userEmail, hasGoal, isSyncing]);
+
+  const handleCompleteTour = () => {
+    if (userEmail) {
+      localStorage.setItem(`life_assistant_tour_seen_${userEmail}`, 'true');
+    }
+    setShowTour(false);
+  };
+
+  const handleSelectTourPrompt = (prompt: string) => {
+    setActiveTab('chat');
+    setStarterPrompt(prompt);
+  };
+
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userEmail || !goalInput.trim()) return;
@@ -152,6 +177,7 @@ function AppContent() {
   const handleNewChat = () => {
     setChatHistory([]);
     setCurrentSessionId('');
+    setStarterPrompt('');
     setActiveTab('chat');
   };
 
@@ -244,6 +270,8 @@ function AppContent() {
               setChatHistory={setChatHistory}
               sessionId={currentSessionId}
               setSessionId={setCurrentSessionId}
+              initialPrompt={starterPrompt}
+              onClearInitialPrompt={() => setStarterPrompt('')}
               onMessageSent={async () => {
                 const query = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : '';
                 const res = await fetch(`${API_URL}/api/chats${query}`);
@@ -255,6 +283,15 @@ function AppContent() {
           )}
         </div>
       </section>
+
+      {showTour && (
+        <OnboardingTour
+          userName={userName}
+          primaryGoal={primaryGoal}
+          onComplete={handleCompleteTour}
+          onSelectPrompt={handleSelectTourPrompt}
+        />
+      )}
     </main>
   );
 }
