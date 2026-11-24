@@ -2,6 +2,7 @@
 
 import { SessionProvider, useSession, signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from 'react';
+import { Menu, Plus } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import ChatWorkspace from '@/components/ChatWorkspace';
 import MemoryManager from '@/components/MemoryManager';
@@ -17,6 +18,7 @@ function AppContent() {
   const [primaryGoal, setPrimaryGoal] = useState("Assistant");
   const [goalInput, setGoalInput] = useState("");
   const [isSyncing, setIsSyncing] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'memory' | 'settings' | 'reminders'>('chat');
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
@@ -98,8 +100,8 @@ function AppContent() {
     e.preventDefault();
     if (!userEmail || !goalInput.trim()) return;
 
-const res = await fetch(`${API_URL}/api/auth/goal`, {
-        method: 'POST',
+    const res = await fetch(`${API_URL}/api/auth/goal`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: userEmail,
@@ -155,7 +157,7 @@ const res = await fetch(`${API_URL}/api/auth/goal`, {
 
   if (status === "loading" || isSyncing) {
     return (
-      <div className="h-screen bg-[#131314] flex items-center justify-center text-white">
+      <div className="h-dvh bg-[#131314] flex items-center justify-center text-white">
         <div className="animate-pulse flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-[#a8c7fa] text-[#062e6f] flex items-center justify-center font-bold">AI</div>
           <p className="text-sm text-[#c4c7c5]">Loading Assistant...</p>
@@ -170,8 +172,8 @@ const res = await fetch(`${API_URL}/api/auth/goal`, {
 
   if (!hasGoal) {
     return (
-      <div className="h-screen bg-[#131314] flex items-center justify-center">
-        <form onSubmit={handleSaveGoal} className="bg-[#1e1f20] p-8 rounded-xl w-96 space-y-4 border border-[#333537]">
+      <div className="h-dvh bg-[#131314] flex items-center justify-center p-4">
+        <form onSubmit={handleSaveGoal} className="bg-[#1e1f20] p-6 sm:p-8 rounded-xl w-full max-w-md space-y-4 border border-[#333537]">
           <h2 className="text-white text-xl font-medium">Welcome, {userName}</h2>
           <p className="text-sm text-[#c4c7c5]">What is your primary goal for this assistant?</p>
           <input
@@ -182,7 +184,7 @@ const res = await fetch(`${API_URL}/api/auth/goal`, {
             className="w-full bg-[#28292a] text-white p-3 rounded-lg outline-none border border-[#444746] focus:border-[#a8c7fa]"
             required
           />
-          <button type="submit" className="w-full bg-[#a8c7fa] text-[#062e6f] py-2 rounded-lg font-medium hover:bg-[#8ab4f8] transition">
+          <button type="submit" className="w-full bg-[#a8c7fa] text-[#062e6f] py-2.5 rounded-lg font-medium hover:bg-[#8ab4f8] transition">
             Start Using Assistant
           </button>
         </form>
@@ -191,7 +193,7 @@ const res = await fetch(`${API_URL}/api/auth/goal`, {
   }
 
   return (
-    <main className="h-screen bg-[#131314] text-[#e3e3e3] flex overflow-hidden">
+    <main className="h-dvh w-full bg-[#131314] text-[#e3e3e3] flex overflow-hidden">
       <Sidebar
         profile={{ user_name: userName, user_email: userEmail, primary_goal: primaryGoal }}
         activeTab={activeTab}
@@ -201,28 +203,57 @@ const res = await fetch(`${API_URL}/api/auth/goal`, {
         currentSessionId={currentSessionId}
         onSelectSession={handleSelectSession}
         onLogout={() => signOut()}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
       />
-      <section className="flex-1 flex flex-col h-full bg-[#131314] relative overflow-hidden">
-        {activeTab === 'memory' && <MemoryManager userEmail={userEmail} />}
-        {activeTab === 'reminders' && <Reminders userName={userName} userEmail={userEmail} />}
-        {activeTab === 'settings' && <Settings settings={chatSettings} setSettings={setChatSettings} />}
-        {activeTab === 'chat' && (
-          <ChatWorkspace
-            userName={userName}
-            userEmail={userEmail}
-            chatHistory={chatHistory}
-            setChatHistory={setChatHistory}
-            sessionId={currentSessionId}
-            setSessionId={setCurrentSessionId}
-            onMessageSent={async () => {
-              const query = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : '';
-              const res = await fetch(`${API_URL}/api/chats${query}`);
-              const data = await res.json();
-              if (Array.isArray(data)) setChatSessions(data);
-            }}
-            settings={chatSettings}
-          />
-        )}
+      <section className="flex-1 min-w-0 flex flex-col h-full bg-[#131314] relative overflow-hidden">
+        {/* Mobile Header */}
+        <header className="flex items-center justify-between px-3 py-2.5 border-b border-[#333537] bg-[#1e1f20] md:hidden shrink-0">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 rounded-lg text-[#e3e3e3] hover:bg-[#28292a] transition"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="bg-[#a8c7fa] text-[#062e6f] px-1.5 py-0.5 rounded-full font-bold text-[10px]">AI</span>
+            <span className="text-sm font-medium text-white">Life Assistant</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="p-2 rounded-lg text-[#e3e3e3] hover:bg-[#28292a] transition"
+            aria-label="New chat"
+            title="New chat"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        </header>
+
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {activeTab === 'memory' && <MemoryManager userEmail={userEmail} />}
+          {activeTab === 'reminders' && <Reminders userName={userName} userEmail={userEmail} />}
+          {activeTab === 'settings' && <Settings settings={chatSettings} setSettings={setChatSettings} />}
+          {activeTab === 'chat' && (
+            <ChatWorkspace
+              userName={userName}
+              userEmail={userEmail}
+              chatHistory={chatHistory}
+              setChatHistory={setChatHistory}
+              sessionId={currentSessionId}
+              setSessionId={setCurrentSessionId}
+              onMessageSent={async () => {
+                const query = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : '';
+                const res = await fetch(`${API_URL}/api/chats${query}`);
+                const data = await res.json();
+                if (Array.isArray(data)) setChatSessions(data);
+              }}
+              settings={chatSettings}
+            />
+          )}
+        </div>
       </section>
     </main>
   );
