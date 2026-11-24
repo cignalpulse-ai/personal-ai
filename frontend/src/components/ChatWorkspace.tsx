@@ -3,7 +3,20 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowUp, Square, Mic, MicOff, Volume2, VolumeX, Download, Copy, Check } from 'lucide-react';
+import {
+  ArrowUp,
+  Square,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Download,
+  Copy,
+  Check,
+  Clock,
+  Database,
+  Sparkles,
+} from 'lucide-react';
 import { ChatSettings } from './Settings';
 import { API_URL } from '@/lib/api';
 
@@ -16,7 +29,27 @@ interface ChatWorkspaceProps {
   setSessionId: (id: string) => void;
   onMessageSent: () => void | Promise<void>;
   settings: ChatSettings;
+  initialPrompt?: string;
+  onClearInitialPrompt?: () => void;
 }
+
+const STARTER_CHIPS = [
+  {
+    icon: Sparkles,
+    label: 'Plan my daily routine',
+    prompt: 'Help me organize a clear daily routine based on my primary goal.',
+  },
+  {
+    icon: Clock,
+    label: 'Set a reminder',
+    prompt: 'Remind me to review my tasks today at 6:00 PM.',
+  },
+  {
+    icon: Database,
+    label: 'Save a routine note',
+    prompt: 'Remember that I prefer focused work blocks in the morning and lighter tasks in the evening.',
+  },
+];
 
 export default function ChatWorkspace({
   userName,
@@ -27,6 +60,8 @@ export default function ChatWorkspace({
   setSessionId,
   onMessageSent,
   settings,
+  initialPrompt,
+  onClearInitialPrompt,
 }: ChatWorkspaceProps) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,6 +80,13 @@ export default function ChatWorkspace({
   const textBufferRef = useRef("");
 
   const userInitials = userName ? userName.slice(0, 2).toUpperCase() : 'ME';
+
+  useEffect(() => {
+    if (initialPrompt) {
+      setQuestion(initialPrompt);
+      onClearInitialPrompt?.();
+    }
+  }, [initialPrompt, onClearInitialPrompt]);
 
   const handleCopyMessage = async (content: string, idx: number) => {
     try {
@@ -354,11 +396,11 @@ export default function ChatWorkspace({
 
   return (
     <div
-      className="flex-1 flex flex-col h-full max-w-3xl w-full mx-auto px-4 overflow-hidden relative"
+      className="flex-1 min-w-0 flex flex-col h-full max-w-3xl w-full mx-auto px-3 sm:px-4 overflow-hidden relative"
       style={{ background: settings.chatBackground }}
     >
       {/* Header Row with Export Button */}
-      <div className="flex justify-end items-center pt-4 pb-2 z-30 shrink-0">
+      <div className="flex justify-end items-center pt-2.5 sm:pt-4 pb-2 z-30 shrink-0">
         <button
           onClick={handleExportChat}
           disabled={chatHistory.length === 0}
@@ -374,27 +416,48 @@ export default function ChatWorkspace({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pb-6">
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-5 sm:space-y-6 pb-6">
         {chatHistory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
-            <h1 className="text-3xl font-medium text-transparent bg-clip-text bg-gradient-to-r from-[#90b4fc] to-[#e3e3e3]">
-              Hello, {userName}.
-            </h1>
-            <p className="text-sm text-[#c4c7c5]">How can I help you manage your day?</p>
+          <div className="flex flex-col items-center justify-center min-h-full text-center space-y-4 px-1 py-4">
+            <div className="space-y-1.5">
+              <h1 className="text-2xl sm:text-3xl font-medium text-transparent bg-clip-text bg-gradient-to-r from-[#90b4fc] to-[#e3e3e3]">
+                Hello, {userName}.
+              </h1>
+              <p className="text-xs sm:text-sm text-[#c4c7c5]">
+                Your personal routine, reminder, and memory workspace.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 max-w-lg pt-1">
+              {STARTER_CHIPS.map((chip) => {
+                const ChipIcon = chip.icon;
+                return (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => setQuestion(chip.prompt)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#1e1f20] hover:bg-[#28292a] border border-[#333537] px-3 py-1.5 text-xs text-[#e3e3e3] transition"
+                  >
+                    <ChipIcon className="w-3.5 h-3.5 text-[#a8c7fa] shrink-0" />
+                    <span>{chip.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {chatHistory.map((msg: { role: string; content: string }, idx: number) => (
-              <div key={idx} className={`flex gap-4 items-start group ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={idx} className={`flex gap-2.5 sm:gap-4 items-start group ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-[#a8c7fa] text-[#062e6f] flex items-center justify-center font-bold text-xs shrink-0 mt-1">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#a8c7fa] text-[#062e6f] flex items-center justify-center font-bold text-xs shrink-0 mt-1">
                     {userInitials}
                   </div>
                 )}
 
-                <div className="flex flex-col max-w-[82%] gap-1">
+                <div className="flex flex-col max-w-[85%] sm:max-w-[82%] min-w-0 gap-1">
                   <div
-                    className={`p-4 leading-relaxed shadow-sm ${
+                    className={`p-3.5 sm:p-4 leading-relaxed shadow-sm break-words ${
                       msg.role === 'user' ? 'text-white' : 'text-[#e3e3e3] border'
                     }`}
                     style={{
@@ -407,7 +470,7 @@ export default function ChatWorkspace({
                     }}
                   >
                     {msg.role === 'assistant' ? (
-                      <div className="prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:bg-[#131314] prose-pre:border prose-pre:border-[#333537] prose-pre:rounded-lg prose-code:text-[#a8c7fa]">
+                      <div className="prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:bg-[#131314] prose-pre:border prose-pre:border-[#333537] prose-pre:rounded-lg prose-pre:overflow-x-auto prose-code:text-[#a8c7fa]">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {msg.content}
                         </ReactMarkdown>
@@ -418,7 +481,7 @@ export default function ChatWorkspace({
                   </div>
 
                   {msg.role === 'assistant' && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-1">
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity pl-1">
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.content, idx)}
@@ -444,8 +507,8 @@ export default function ChatWorkspace({
             ))}
 
             {loading && (
-              <div className="flex gap-4 items-start justify-start">
-                <div className="w-8 h-8 rounded-full bg-[#a8c7fa] text-[#062e6f] flex items-center justify-center font-bold text-xs shrink-0 mt-1">
+              <div className="flex gap-2.5 sm:gap-4 items-start justify-start">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#a8c7fa] text-[#062e6f] flex items-center justify-center font-bold text-xs shrink-0 mt-1">
                   {userInitials}
                 </div>
                 <div className="bg-[#1e1f20] border border-[#333537] p-4 rounded-2xl rounded-bl-sm flex items-center gap-1.5 h-[52px]">
@@ -463,10 +526,14 @@ export default function ChatWorkspace({
       </div>
 
       {/* Fade gradient */}
-      <div className="absolute top-14 left-0 right-0 h-6 bg-gradient-to-b from-[#131314] to-transparent pointer-events-none z-10" />
+      <div className="absolute top-12 sm:top-14 left-0 right-0 h-6 bg-gradient-to-b from-[#131314] to-transparent pointer-events-none z-10" />
 
-      <div className="py-4 bg-[#131314] shrink-0 z-20">
-        <form ref={formRef} onSubmit={handleSendChat} className="bg-[#1e1f20] border border-[#444746] rounded-3xl p-2 flex items-center gap-2 shadow-lg">
+      <div className="py-3 sm:py-4 bg-[#131314] shrink-0 z-20 w-full">
+        <form
+          ref={formRef}
+          onSubmit={handleSendChat}
+          className="bg-[#1e1f20] border border-[#444746] rounded-3xl p-1.5 sm:p-2 flex items-center gap-1 sm:gap-2 shadow-lg w-full max-w-full overflow-hidden"
+        >
           <button
             type="button"
             onClick={() => {
@@ -478,7 +545,7 @@ export default function ChatWorkspace({
                 isSpeakingRef.current = false;
               }
             }}
-            className={`p-2.5 rounded-full transition ${
+            className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition shrink-0 ${
               voiceEnabled
                 ? 'bg-[#004a77] text-[#c2e7ff]'
                 : 'bg-[#28292a] text-[#c4c7c5] hover:bg-[#333537] hover:text-white'
@@ -491,7 +558,7 @@ export default function ChatWorkspace({
           <button
             type="button"
             onClick={toggleListening}
-            className={`p-2.5 rounded-full transition ${
+            className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition shrink-0 ${
               isListening
                 ? 'bg-red-500 text-white animate-pulse'
                 : 'bg-[#28292a] text-[#c4c7c5] hover:bg-[#333537] hover:text-white'
@@ -505,15 +572,15 @@ export default function ChatWorkspace({
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder={isListening ? "Listening..." : "Ask about your schedule, routines, or notes..."}
-            className="flex-1 bg-transparent border-none outline-none px-4 text-sm text-white placeholder-[#8e918f]"
+            placeholder={isListening ? "Listening..." : "Ask about routines or notes..."}
+            className="w-0 flex-1 min-w-0 bg-transparent border-none outline-none px-1.5 sm:px-3 text-sm text-white placeholder-[#8e918f]"
           />
 
           {loading ? (
             <button
               type="button"
               onClick={handleStopStreaming}
-              className="p-2.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+              className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 transition shrink-0"
               title="Stop generating"
             >
               <Square className="w-4 h-4 fill-current" />
@@ -522,8 +589,11 @@ export default function ChatWorkspace({
             <button
               type="submit"
               disabled={!question.trim()}
-              className={`p-2.5 rounded-full transition ${
-                question.trim() ? 'bg-[#a8c7fa] text-[#062e6f] hover:bg-[#8ab4f8]' : 'bg-[#333537] text-[#8e918f] cursor-not-allowed'
+              aria-label="Send message"
+              className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition shrink-0 ${
+                question.trim()
+                  ? 'bg-[#a8c7fa] text-[#062e6f] hover:bg-[#8ab4f8]'
+                  : 'bg-[#333537] text-[#8e918f] cursor-not-allowed'
               }`}
             >
               <ArrowUp className="w-4 h-4 font-bold" />
