@@ -9,7 +9,7 @@ import MemoryManager from '@/components/MemoryManager';
 import Settings, { ChatSettings, DEFAULT_SETTINGS } from '@/components/Settings';
 import Reminders from '@/components/Reminders';
 import LoginCard from '@/components/LoginCard';
-import OnboardingTour from '@/components/OnboardingTour';
+import OnboardingTour, { TourStepConfig } from '@/components/OnboardingTour';
 import { API_URL } from "@/lib/api";
 
 function AppContent() {
@@ -21,6 +21,7 @@ function AppContent() {
   const [isSyncing, setIsSyncing] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [activeTourTarget, setActiveTourTarget] = useState<string | null>(null);
   const [starterPrompt, setStarterPrompt] = useState("");
 
   const [activeTab, setActiveTab] = useState<'chat' | 'memory' | 'settings' | 'reminders'>('chat');
@@ -41,6 +42,7 @@ function AppContent() {
       syncedEmailRef.current = null;
       setHasGoal(false);
       setShowTour(false);
+      setActiveTourTarget(null);
       setIsSyncing(false);
       return;
     }
@@ -113,12 +115,16 @@ function AppContent() {
     if (userEmail) {
       localStorage.setItem(`life_assistant_tour_seen_${userEmail}`, 'true');
     }
+    setActiveTourTarget(null);
+    setMobileMenuOpen(false);
     setShowTour(false);
   };
 
-  const handleSelectTourPrompt = (prompt: string) => {
-    setActiveTab('chat');
-    setStarterPrompt(prompt);
+  const handleTourStepChange = (step: TourStepConfig) => {
+    setActiveTourTarget(step.targetId);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setMobileMenuOpen(Boolean(step.isSidebarTarget));
+    }
   };
 
   const handleSaveGoal = async (e: React.FormEvent) => {
@@ -231,6 +237,7 @@ function AppContent() {
         onLogout={() => signOut()}
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
+        activeTourTarget={activeTourTarget}
       />
       <section className="flex-1 min-w-0 flex flex-col h-full bg-[#131314] relative overflow-hidden">
         {/* Mobile Header */}
@@ -286,10 +293,8 @@ function AppContent() {
 
       {showTour && (
         <OnboardingTour
-          userName={userName}
-          primaryGoal={primaryGoal}
           onComplete={handleCompleteTour}
-          onSelectPrompt={handleSelectTourPrompt}
+          onStepChange={handleTourStepChange}
         />
       )}
     </main>

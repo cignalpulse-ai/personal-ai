@@ -1,74 +1,135 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  MessageSquare,
-  Clock,
-  Database,
-  Mic,
-  ArrowRight,
-  Check,
-  X,
-  Sparkles,
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ArrowRight, Check, X, Sparkles } from 'lucide-react';
 
-interface OnboardingTourProps {
-  userName: string;
-  primaryGoal: string;
-  onComplete: () => void;
-  onSelectPrompt?: (prompt: string) => void;
+export interface TourStepConfig {
+  targetId: string | null;
+  title: string;
+  description: string;
+  isSidebarTarget?: boolean;
 }
 
-const TOUR_STEPS = [
+export const DEFAULT_TOUR_STEPS: TourStepConfig[] = [
   {
-    icon: Sparkles,
-    badge: 'Step 1 of 4 · Focused Purpose',
-    title: 'Built for Your Daily Life, Not Random Trivia',
+    targetId: 'chat-input',
+    title: 'Chat & Ask Anything',
     description:
-      'Unlike a general chatbot, Life Assistant is tailored around your personal routine, tasks, and goals—keeping everything organized in one private workspace.',
-    tip: 'Try asking: "Plan my morning routine around my goal."',
-    samplePrompt: 'Help me build a simple daily routine around my primary goal.',
+      'Type routines, tasks, general questions, or coding prompts here. You can also set reminders naturally in chat.',
+    isSidebarTarget: false,
   },
   {
-    icon: Clock,
-    badge: 'Step 2 of 4 · Smart Reminders',
-    title: 'Set Time-Aware Reminders Naturally',
+    targetId: 'mic-btn',
+    title: 'Voice Input (Mic)',
     description:
-      'Tell the assistant to remind you about anything in plain language, or manage upcoming alerts directly inside the Reminders tab.',
-    tip: 'Try saying: "Remind me to review my notes at 7:00 PM."',
-    samplePrompt: 'Remind me to review my tasks today at 7:00 PM.',
+      'Tap the microphone to speak your notes, tasks, or questions hands-free and send them right away.',
+    isSidebarTarget: false,
   },
   {
-    icon: Database,
-    badge: 'Step 3 of 4 · Personal Memory',
-    title: 'Long-Term Memory & Routine Context',
+    targetId: 'voice-btn',
+    title: 'AI Voice Playback',
     description:
-      'Save key preferences, schedules, and personal notes in Memory & Routine so the assistant remembers your context across every new chat.',
-    tip: 'Open "Memory & Routine" anytime to view or add facts.',
-    samplePrompt: 'What should I save in my Memory & Routine so you can assist me better?',
+      'Toggle this speaker button to have the assistant read replies out loud while you multitask.',
+    isSidebarTarget: false,
   },
   {
-    icon: Mic,
-    badge: 'Step 4 of 4 · Voice & Hands-Free',
-    title: 'Speak or Listen on the Go',
+    targetId: 'export-btn',
+    title: 'Export Chat',
     description:
-      'Use the microphone button to dictate tasks quickly and toggle voice responses when you want hands-free updates.',
-    tip: 'You are all set—pick a starter prompt or type below!',
-    samplePrompt: '',
+      'Download your current conversation as a Markdown (.md) file anytime for notes or reference.',
+    isSidebarTarget: false,
+  },
+  {
+    targetId: 'new-chat',
+    title: 'New Chat',
+    description:
+      'Start a fresh conversation thread anytime without losing your saved memories or past chats.',
+    isSidebarTarget: true,
+  },
+  {
+    targetId: 'nav-chat',
+    title: 'Chat Workspace',
+    description:
+      'Jump back to your main conversational workspace for daily planning, Q&A, and task assistance.',
+    isSidebarTarget: true,
+  },
+  {
+    targetId: 'nav-reminders',
+    title: 'Reminders',
+    description:
+      'View upcoming scheduled reminders, mark routine tasks complete, or remove ones you no longer need.',
+    isSidebarTarget: true,
+  },
+  {
+    targetId: 'nav-memory',
+    title: 'Memory & Routine',
+    description:
+      'Store important personal notes, preferences, and routines—or upload files—so the assistant remembers context.',
+    isSidebarTarget: true,
+  },
+  {
+    targetId: 'nav-settings',
+    title: 'Settings',
+    description:
+      'Customize your AI persona, voice selection, bubble colors, font size, and chat appearance.',
+    isSidebarTarget: true,
+  },
+  {
+    targetId: 'recent-chats',
+    title: 'Recent Chats',
+    description:
+      'Switch back to any previous chat session from your history list.',
+    isSidebarTarget: true,
+  },
+  {
+    targetId: 'logout-btn',
+    title: 'Sign Out',
+    description:
+      'Safely sign out of your Google account on this device when you are done.',
+    isSidebarTarget: true,
   },
 ];
 
+interface OnboardingTourProps {
+  steps?: TourStepConfig[];
+  onComplete: () => void;
+  onStepChange?: (step: TourStepConfig) => void;
+}
+
 export default function OnboardingTour({
-  userName,
-  primaryGoal,
+  steps = DEFAULT_TOUR_STEPS,
   onComplete,
-  onSelectPrompt,
+  onStepChange,
 }: OnboardingTourProps) {
   const [stepIndex, setStepIndex] = useState(0);
+  const [rect, setRect] = useState<DOMRect | null>(null);
 
-  const step = TOUR_STEPS[stepIndex];
-  const Icon = step.icon;
-  const isLast = stepIndex === TOUR_STEPS.length - 1;
+  const currentStep = steps[stepIndex];
+  const isLast = stepIndex === steps.length - 1;
+
+  const updateTargetRect = useCallback(() => {
+    if (!currentStep?.targetId) {
+      setRect(null);
+      return;
+    }
+    const el = document.querySelector(`[data-tour-id="${currentStep.targetId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setRect(el.getBoundingClientRect());
+    } else {
+      setRect(null);
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
+    onStepChange?.(currentStep);
+    const timer = setTimeout(updateTargetRect, 180);
+    window.addEventListener('resize', updateTargetRect);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateTargetRect);
+    };
+  }, [currentStep, onStepChange, updateTargetRect]);
 
   const handleNext = () => {
     if (isLast) {
@@ -78,107 +139,102 @@ export default function OnboardingTour({
     }
   };
 
+  // Compute safe tooltip card position on screen
+  const cardWidth = Math.min(320, typeof window !== 'undefined' ? window.innerWidth - 24 : 320);
+  let top = 120;
+  let left = 12;
+
+  if (typeof window !== 'undefined') {
+    if (rect) {
+      // On desktop if in sidebar, place to the right of sidebar; otherwise above/below target
+      const isDesktop = window.innerWidth >= 768;
+      if (isDesktop && currentStep.isSidebarTarget) {
+        left = Math.min(rect.right + 16, window.innerWidth - cardWidth - 12);
+        top = Math.min(Math.max(rect.top - 12, 16), window.innerHeight - 230);
+      } else {
+        left = Math.min(Math.max(rect.left, 12), window.innerWidth - cardWidth - 12);
+        const spaceBelow = window.innerHeight - rect.bottom;
+        top = spaceBelow > 230 ? rect.bottom + 12 : Math.max(rect.top - 220, 16);
+      }
+    } else {
+      left = Math.max((window.innerWidth - cardWidth) / 2, 12);
+      top = Math.max((window.innerHeight - 220) / 2, 16);
+    }
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="tour-title"
-    >
-      <div className="w-full max-w-md rounded-2xl bg-[#1e1f20] border border-[#333537] p-6 text-[#e3e3e3] shadow-2xl space-y-5">
-        {/* Top Row: Step Pill + Skip */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#004a77] px-3 py-1 text-[11px] font-medium text-[#c2e7ff]">
-            {step.badge}
+    <div className="fixed inset-0 z-[60] pointer-events-auto">
+      {/* Subtle Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={onComplete}
+        aria-hidden="true"
+      />
+
+      {/* Spotlight Box Around Target Button */}
+      {rect && (
+        <div
+          className="fixed z-[61] rounded-xl border-2 border-[#a8c7fa] shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] pointer-events-none transition-all duration-200"
+          style={{
+            top: rect.top - 4,
+            left: rect.left - 4,
+            width: rect.width + 8,
+            height: rect.height + 8,
+          }}
+        />
+      )}
+
+      {/* Tooltip Popover */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{ top, left, width: cardWidth }}
+        className="fixed z-[62] rounded-2xl bg-[#1e1f20] border border-[#444746] p-4 text-[#e3e3e3] shadow-2xl space-y-3 transition-all duration-200"
+      >
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#a8c7fa]">
+            <Sparkles className="w-3.5 h-3.5" />
+            Tip {stepIndex + 1} of {steps.length}
           </span>
           <button
             type="button"
             onClick={onComplete}
-            className="inline-flex items-center gap-1 text-xs text-[#c4c7c5] hover:text-white transition"
+            className="text-xs text-[#c4c7c5] hover:text-white inline-flex items-center gap-0.5"
           >
             Skip <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Icon + Title + Copy */}
-        <div className="space-y-2.5">
-          <div className="w-11 h-11 rounded-xl bg-[#28292a] border border-[#333537] flex items-center justify-center text-[#a8c7fa]">
-            <Icon className="w-5 h-5" />
-          </div>
-
-          {stepIndex === 0 && (
-            <p className="text-xs text-[#a8c7fa]">
-              Welcome, <span className="font-medium">{userName}</span> · Goal:{' '}
-              <span className="italic">{primaryGoal}</span>
-            </p>
-          )}
-
-          <h3 id="tour-title" className="text-lg font-medium text-white leading-snug">
-            {step.title}
-          </h3>
-
-          <p className="text-sm text-[#c4c7c5] leading-relaxed">{step.description}</p>
+        <div className="space-y-1">
+          <h4 className="text-sm font-semibold text-white">{currentStep.title}</h4>
+          <p className="text-xs text-[#c4c7c5] leading-relaxed">{currentStep.description}</p>
         </div>
 
-        {/* Actionable Tip Box */}
-        <div className="rounded-xl bg-[#28292a] border border-[#333537] p-3 text-xs text-[#e3e3e3] flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2">
-            <MessageSquare className="w-4 h-4 text-[#a8c7fa] shrink-0 mt-0.5" />
-            <span>{step.tip}</span>
-          </div>
-          {step.samplePrompt && onSelectPrompt && (
-            <button
-              type="button"
-              onClick={() => {
-                onSelectPrompt(step.samplePrompt);
-                onComplete();
-              }}
-              className="shrink-0 text-[11px] font-medium text-[#a8c7fa] hover:underline"
-            >
-              Try it →
-            </button>
-          )}
-        </div>
-
-        {/* Progress Dots + Back / Next Buttons */}
         <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1.5">
-            {TOUR_STEPS.map((_, idx) => (
-              <span
-                key={idx}
-                className={`h-1.5 rounded-full transition-all ${
-                  idx === stepIndex ? 'w-5 bg-[#a8c7fa]' : 'w-1.5 bg-[#444746]'
-                }`}
-              />
-            ))}
-          </div>
+          <button
+            type="button"
+            disabled={stepIndex === 0}
+            onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+            className="px-2.5 py-1.5 rounded-lg text-xs text-[#c4c7c5] hover:bg-[#28292a] disabled:opacity-40 transition"
+          >
+            Back
+          </button>
 
-          <div className="flex items-center gap-2">
-            {stepIndex > 0 && (
-              <button
-                type="button"
-                onClick={() => setStepIndex((prev) => prev - 1)}
-                className="px-3 py-2 rounded-lg text-xs text-[#c4c7c5] hover:bg-[#28292a] hover:text-white transition"
-              >
-                Back
-              </button>
+          <button
+            type="button"
+            onClick={handleNext}
+            className="inline-flex items-center gap-1 bg-[#a8c7fa] hover:bg-[#8ab4f8] text-[#062e6f] px-3.5 py-1.5 rounded-lg text-xs font-medium transition"
+          >
+            {isLast ? (
+              <>
+                Done <Check className="w-3.5 h-3.5" />
+              </>
+            ) : (
+              <>
+                Next <ArrowRight className="w-3.5 h-3.5" />
+              </>
             )}
-            <button
-              type="button"
-              onClick={handleNext}
-              className="inline-flex items-center gap-1.5 bg-[#a8c7fa] hover:bg-[#8ab4f8] text-[#062e6f] px-4 py-2 rounded-lg text-xs font-medium transition"
-            >
-              {isLast ? (
-                <>
-                  Got it <Check className="w-3.5 h-3.5" />
-                </>
-              ) : (
-                <>
-                  Next <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
-          </div>
+          </button>
         </div>
       </div>
     </div>

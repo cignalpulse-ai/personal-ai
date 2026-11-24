@@ -26,6 +26,7 @@ interface SidebarProps {
   onLogout: () => void | Promise<unknown>;
   isOpen?: boolean;
   onClose?: () => void;
+  activeTourTarget?: string | null;
 }
 
 export default function Sidebar({
@@ -39,6 +40,7 @@ export default function Sidebar({
   onLogout,
   isOpen = false,
   onClose,
+  activeTourTarget = null,
 }: SidebarProps) {
   const [reminders, setReminders] = useState<{ id: string; task: string; time: string }[]>([]);
 
@@ -119,6 +121,8 @@ export default function Sidebar({
     onClose?.();
   };
 
+  const isHighlighted = (target: string) => activeTourTarget === target;
+
   return (
     <>
       {/* Mobile Backdrop Overlay */}
@@ -181,11 +185,15 @@ export default function Sidebar({
           </div>
 
           <button
+            type="button"
+            data-tour-id="new-chat"
             onClick={() => {
               onNewChat();
               onClose?.();
             }}
-            className="flex items-center gap-3 bg-[#28292a] hover:bg-[#333537] text-white w-full px-3 py-2.5 rounded-full text-xs font-medium transition shadow-sm"
+            className={`flex items-center gap-3 bg-[#28292a] hover:bg-[#333537] text-white w-full px-3 py-2.5 rounded-full text-xs font-medium transition shadow-sm ${
+              isHighlighted('new-chat') ? 'ring-2 ring-[#a8c7fa] bg-[#333537]' : ''
+            }`}
           >
             <Plus className="w-4 h-4" /> New Chat
           </button>
@@ -193,41 +201,49 @@ export default function Sidebar({
           <div className="space-y-1 pt-2">
             <p className="px-3 text-[11px] font-semibold text-[#c4c7c5] uppercase tracking-wider">Navigation</p>
             <button
+              type="button"
+              data-tour-id="nav-chat"
               onClick={() => handleNavClick('chat')}
               className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition ${
                 activeTab === 'chat' ? 'bg-[#004a77] text-[#c2e7ff]' : 'hover:bg-[#28292a] text-[#e3e3e3]'
-              }`}
+              } ${isHighlighted('nav-chat') ? 'ring-2 ring-[#a8c7fa]' : ''}`}
             >
               <MessageSquare className="w-4 h-4" /> Chat Workspace
             </button>
             <button
+              type="button"
+              data-tour-id="nav-reminders"
               onClick={() => handleNavClick('reminders')}
               className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition ${
                 activeTab === 'reminders' ? 'bg-[#004a77] text-[#c2e7ff]' : 'hover:bg-[#28292a] text-[#e3e3e3]'
-              }`}
+              } ${isHighlighted('nav-reminders') ? 'ring-2 ring-[#a8c7fa]' : ''}`}
             >
               <Clock className="w-4 h-4" /> Reminders
             </button>
             <button
+              type="button"
+              data-tour-id="nav-memory"
               onClick={() => handleNavClick('memory')}
               className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition ${
                 activeTab === 'memory' ? 'bg-[#004a77] text-[#c2e7ff]' : 'hover:bg-[#28292a] text-[#e3e3e3]'
-              }`}
+              } ${isHighlighted('nav-memory') ? 'ring-2 ring-[#a8c7fa]' : ''}`}
             >
               <Database className="w-4 h-4" /> Memory & Routine
             </button>
             <button
+              type="button"
+              data-tour-id="nav-settings"
               onClick={() => handleNavClick('settings')}
               className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition ${
                 activeTab === 'settings' ? 'bg-[#004a77] text-[#c2e7ff]' : 'hover:bg-[#28292a] text-[#e3e3e3]'
-              }`}
+              } ${isHighlighted('nav-settings') ? 'ring-2 ring-[#a8c7fa]' : ''}`}
             >
               <SettingsIcon className="w-4 h-4" /> Settings
             </button>
           </div>
 
           {/* Past Chat Sessions History List */}
-          <div className="space-y-1 pt-4">
+          <div data-tour-id="recent-chats" className={`space-y-1 pt-4 rounded-lg ${isHighlighted('recent-chats') ? 'ring-2 ring-[#a8c7fa] p-1.5 bg-[#28292a]/50' : ''}`}>
             <p className="px-3 text-[11px] font-semibold text-[#c4c7c5] uppercase tracking-wider flex items-center gap-2">
               <History className="w-3 h-3" /> Recent Chats
             </p>
@@ -236,6 +252,7 @@ export default function Sidebar({
                 chatSessions.map((session) => (
                   <button
                     key={session.session_id}
+                    type="button"
                     onClick={() => {
                       setActiveTab('chat');
                       onSelectSession(session.session_id);
@@ -266,8 +283,11 @@ export default function Sidebar({
           </div>
           <button
             type="button"
+            data-tour-id="logout-btn"
             onClick={onLogout}
-            className="p-2 rounded-lg text-[#c4c7c5] hover:text-red-400 hover:bg-[#28292a] transition shrink-0"
+            className={`p-2 rounded-lg text-[#c4c7c5] hover:text-red-400 hover:bg-[#28292a] transition shrink-0 ${
+              isHighlighted('logout-btn') ? 'ring-2 ring-[#a8c7fa] text-white bg-[#28292a]' : ''
+            }`}
             title="Sign out"
             aria-label="Sign out"
           >
