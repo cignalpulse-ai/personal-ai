@@ -38,7 +38,6 @@ export default function Sidebar({
     const checkAll = async () => {
       try {
         // 1. Check for time-based reminders
-        // const remRes = await fetch(`http://127.0.0.1:8000/api/reminders/due?${qs}`);
         const remRes = await fetch(`${API_URL}/api/reminders/due?${qs}`);
         const remData = await remRes.json();
 
@@ -63,8 +62,7 @@ export default function Sidebar({
         }
 
         // 2. Check for proactive notifications (Daily Briefing)
-        // const notifRes = await fetch(`http://127.0.0.1:8000/api/notifications?${qs}`);
-        const notifRes = await fetch(`${API_URL}/api/notifications/due?${qs}`);
+        const notifRes = await fetch(`${API_URL}/api/notifications?${qs}`);
         const notifData = await notifRes.json();
 
         if (Array.isArray(notifData) && notifData.length > 0) {

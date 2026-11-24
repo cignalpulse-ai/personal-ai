@@ -7,22 +7,73 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { API_URL } from '@/lib/api';
 
 interface OnboardingModalProps {
+  userEmail?: string;
+  initialName?: string;
   onProfileSaved: (profile: any) => void;
 }
 
-export default function OnboardingModal({ onProfileSaved }: OnboardingModalProps) {
-  const [userName, setUserName] = useState('');
+export default function OnboardingModal({
+  userEmail = '',
+  initialName = '',
+  onProfileSaved,
+}: OnboardingModalProps) {
+  const [userName, setUserName] = useState(initialName);
   const [primaryGoal, setPrimaryGoal] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-const res = await fetch(`${API_URL}/api/profile`, {
-        method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_name: userName, primary_goal: primaryGoal }),
-    });
-    const data = await res.json();
-    onProfileSaved(data);
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (userEmail) {
+        await fetch(`${API_URL}/api/auth/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: userEmail, name: userName.trim() }),
+        });
+
+        const res = await fetch(`${API_URL}/api/auth/goal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userEmail,
+            primary_goal: primaryGoal.trim(),
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Request failed (${res.status})`);
+        }
+
+        const data = await res.json();
+        onProfileSaved({ ...data, name: userName.trim(), email: userEmail });
+      } else {
+        const res = await fetch(`${API_URL}/api/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_name: userName.trim(),
+            primary_goal: primaryGoal.trim(),
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Request failed (${res.status})`);
+        }
+
+        const data = await res.json();
+        onProfileSaved(data);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Could not save your profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,8 +106,19 @@ const res = await fetch(`${API_URL}/api/profile`, {
                 required
               />
             </div>
-            <Button type="submit" className="w-full bg-[#a8c7fa] hover:bg-[#8ab4f8] text-[#062e6f] font-medium mt-2">
-              Start Using Assistant
+
+            {error && (
+              <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/50 rounded p-2">
+                {error}
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#a8c7fa] hover:bg-[#8ab4f8] text-[#062e6f] font-medium mt-2 disabled:opacity-60"
+            >
+              {loading ? 'Saving...' : 'Start Using Assistant'}
             </Button>
           </form>
         </CardContent>
