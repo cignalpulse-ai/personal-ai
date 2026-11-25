@@ -30,6 +30,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+GUEST_MESSAGE_LIMIT = 6
+
 # --- SCHEDULER SETUP ---
 scheduler = BackgroundScheduler()
 
@@ -143,6 +145,12 @@ class UserSyncRequest(BaseModel):
 class UserGoalRequest(BaseModel):
     email: str
     primary_goal: str
+
+
+class ClaimGuestRequest(BaseModel):
+    guest_email: str
+    email: str
+    name: str
 
 
 class QueryRequest(BaseModel):
@@ -300,6 +308,61 @@ def set_user_goal(data: UserGoalRequest, db: Session = Depends(get_db)):
         db.commit()
         return {"status": "success", "primary_goal": user.primary_goal}
     raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.post("/api/auth/claim-guest")
+def claim_guest_account(data: ClaimGuestRequest, db: Session = Depends(get_db)):
+    if not data.guest_email or not data.guest_email.endswith("@guest.cignalpulse.local"):
+        return {"status": "ignored", "reason": "Invalid guest identifier"}
+
+    if data.guest_email == data.email:
+        return {"status": "ignored", "reason": "Same account"}
+
+    guest_user = db.query(User).filter(User.email == data.guest_email).first()
+    real_user = db.query(User).filter(User.email == data.email).first()
+
+    if not real_user:
+        real_user = User(
+            email=data.email,
+            name=data.name,
+            primary_goal=guest_user.primary_goal if guest_user else None,
+            system_prompt=guest_user.system_prompt if guest_user else None,
+        )
+        db.add(real_user)
+    else:
+        if data.name and real_user.name != data.name:
+            real_user.name = data.name
+        if not real_user.primary_goal and guest_user and guest_user.primary_goal:
+            real_user.primary_goal = guest_user.primary_goal
+            real_user.system_prompt = build_assistant_system_prompt(
+                real_user.name, real_user.primary_goal
+            )
+
+    db.query(ChatMessage).filter(ChatMessage.user_email == data.guest_email).update(
+        {"user_email": data.email}, synchronize_session=False
+    )
+    db.query(DocumentMeta).filter(DocumentMeta.user_email == data.guest_email).update(
+        {"user_email": data.email}, synchronize_session=False
+    )
+    db.query(Reminder).filter(Reminder.email == data.guest_email).update(
+        {"email": data.email, "user_name": data.name}, synchronize_session=False
+    )
+    db.query(Notification).filter(Notification.email == data.guest_email).update(
+        {"email": data.email, "user_name": data.name}, synchronize_session=False
+    )
+
+    if guest_user:
+        db.delete(guest_user)
+
+    db.commit()
+    db.refresh(real_user)
+
+    return {
+        "status": "claimed",
+        "has_goal": bool(real_user.primary_goal),
+        "primary_goal": real_user.primary_goal,
+        "name": real_user.name,
+    }
 
 
 # --- MEMORY & UPLOAD ENDPOINTS ---
@@ -569,6 +632,23 @@ def chat(request: QueryRequest, db: Session = Depends(get_db)):
     try:
         is_new_session = not request.session_id
         session_id = request.session_id or str(uuid.uuid4())
+
+        is_guest = bool(request.user_email and request.user_email.endswith("@guest.cignalpulse.local"))
+        if is_guest:
+            guest_msg_count = (
+                db.query(ChatMessage)
+                .filter(
+                    ChatMessage.user_email == request.user_email,
+                    ChatMessage.role == "user",
+                )
+                .count()
+            )
+            if guest_msg_count >= GUEST_MESSAGE_LIMIT:
+                def limit_generator():
+                    yield f"data: {json.dumps({'limit_reached': True, 'error': 'Free guest limit reached. Sign in with Google to keep chatting and save your history.'})}\n\n"
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+
+                return StreamingResponse(limit_generator(), media_type="text/event-stream")
 
         user = db.query(User).filter(User.email == request.user_email).first() if request.user_email else None
         user_name = user.name if user else "User"

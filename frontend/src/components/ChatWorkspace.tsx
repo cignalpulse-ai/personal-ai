@@ -31,6 +31,7 @@ interface ChatWorkspaceProps {
   settings: ChatSettings;
   initialPrompt?: string;
   onClearInitialPrompt?: () => void;
+  onGuestLimitReached?: () => void;
 }
 
 const STARTER_CHIPS = [
@@ -62,6 +63,7 @@ export default function ChatWorkspace({
   settings,
   initialPrompt,
   onClearInitialPrompt,
+  onGuestLimitReached,
 }: ChatWorkspaceProps) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
@@ -337,6 +339,15 @@ export default function ChatWorkspace({
             try {
               const data = JSON.parse(dataStr);
 
+              if (data.limit_reached) {
+                setLoading(false);
+                abortControllerRef.current = null;
+                setChatHistory((prev) => prev.slice(0, -1));
+                setQuestion(userMsg);
+                onGuestLimitReached?.();
+                return;
+              }
+
               if (data.token) {
                 currentAnswer += data.token;
                 queueSpeech(data.token, false);
@@ -402,6 +413,8 @@ export default function ChatWorkspace({
       {/* Header Row with Export Button */}
       <div className="flex justify-end items-center pt-2.5 sm:pt-4 pb-2 z-30 shrink-0">
         <button
+          type="button"
+          data-tour-id="export-btn"
           onClick={handleExportChat}
           disabled={chatHistory.length === 0}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
@@ -424,7 +437,7 @@ export default function ChatWorkspace({
                 Hello, {userName}.
               </h1>
               <p className="text-xs sm:text-sm text-[#c4c7c5]">
-                Your personal routine, reminder, and memory workspace.
+                Your personal routine, reminder, memory, and general AI workspace.
               </p>
             </div>
 
@@ -531,11 +544,13 @@ export default function ChatWorkspace({
       <div className="py-3 sm:py-4 bg-[#131314] shrink-0 z-20 w-full">
         <form
           ref={formRef}
+          data-tour-id="chat-input"
           onSubmit={handleSendChat}
           className="bg-[#1e1f20] border border-[#444746] rounded-3xl p-1.5 sm:p-2 flex items-center gap-1 sm:gap-2 shadow-lg w-full max-w-full overflow-hidden"
         >
           <button
             type="button"
+            data-tour-id="voice-btn"
             onClick={() => {
               setVoiceEnabled(!voiceEnabled);
               if (voiceEnabled) {
@@ -557,6 +572,7 @@ export default function ChatWorkspace({
 
           <button
             type="button"
+            data-tour-id="mic-btn"
             onClick={toggleListening}
             className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition shrink-0 ${
               isListening
@@ -572,7 +588,7 @@ export default function ChatWorkspace({
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder={isListening ? "Listening..." : "Ask about routines or notes..."}
+            placeholder={isListening ? "Listening..." : "Ask about routines, tasks, code, or anything..."}
             className="w-0 flex-1 min-w-0 bg-transparent border-none outline-none px-1.5 sm:px-3 text-sm text-white placeholder-[#8e918f]"
           />
 

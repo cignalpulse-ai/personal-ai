@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { ShieldCheck, CalendarClock, BrainCircuit, Loader2 } from 'lucide-react';
 
-export default function LoginCard() {
+interface LoginCardProps {
+  compact?: boolean;
+}
+
+export default function LoginCard({ compact = false }: LoginCardProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const handleGoogleSignIn = async () => {
@@ -18,18 +22,28 @@ export default function LoginCard() {
   };
 
   return (
-    <div className="min-h-dvh w-full bg-[#131314] text-[#e3e3e3] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Subtle ambient glow */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[520px] h-[280px] rounded-full opacity-20 blur-3xl"
-        style={{ background: 'radial-gradient(circle, #a8c7fa 0%, #004a77 55%, transparent 75%)' }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-32 right-1/4 w-[380px] h-[240px] rounded-full opacity-10 blur-3xl"
-        style={{ background: 'radial-gradient(circle, #8ab4f8 0%, transparent 70%)' }}
-      />
+    <div
+      className={
+        compact
+          ? 'w-full text-[#e3e3e3] flex items-center justify-center relative'
+          : 'min-h-dvh w-full bg-[#131314] text-[#e3e3e3] flex items-center justify-center p-4 relative overflow-hidden'
+      }
+    >
+      {/* Subtle ambient glow (standalone mode only) */}
+      {!compact && (
+        <>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[520px] h-[280px] rounded-full opacity-20 blur-3xl"
+            style={{ background: 'radial-gradient(circle, #a8c7fa 0%, #004a77 55%, transparent 75%)' }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-32 right-1/4 w-[380px] h-[240px] rounded-full opacity-10 blur-3xl"
+            style={{ background: 'radial-gradient(circle, #8ab4f8 0%, transparent 70%)' }}
+          />
+        </>
+      )}
 
       {/* Card */}
       <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#333537] bg-[#1e1f20] shadow-2xl p-7 space-y-6">
@@ -44,7 +58,7 @@ export default function LoginCard() {
               Welcome back
             </h1>
             <p className="text-sm text-[#c4c7c5] leading-relaxed">
-              Sign in with your Google account to access your routines, vector memory, and reminders.
+              Sign in with your Google account to save your chats and access routines, vector memory, and reminders.
             </p>
           </div>
         </div>

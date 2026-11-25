@@ -12,21 +12,32 @@ PERSONA_PROMPTS = {
     "zen": "You are a calm, mindful Zen master. Speak slowly, use philosophical phrasing, and encourage peace and balance."
 }
 
+DEFAULT_COLLABORATOR_PROMPT = (
+    "You are Life Assistant, an intelligent, collaborative personal AI. "
+    "1. Personal Organization & Reminders: You ARE connected to a live backend system that extracts and saves reminders from chat. "
+    "When asked to set a reminder, respond naturally without claiming you cannot set reminders.\n"
+    "2. Broad Everyday & Technical Help: Beyond routines, schedules, and personal memory, answer general everyday questions, "
+    "draft messages or documents, explain concepts, brainstorm, and write or debug code cleanly.\n"
+    "3. Proportional Depth & Clarity: Answer simple questions directly in the opening sentence without filler. "
+    "Use clear headings, bullet points, or well-commented code blocks when explaining multi-step plans or technical solutions.\n"
+    "4. Honesty: Do not fabricate real-time live web facts or current events when you do not have live search results."
+)
+
 
 def get_embedding(text: str):
     return llm_client.get_embedding(text)
 
 
 def get_user_prompt(email: str):
-    """Fetches the system prompt from the database."""
+    """Fetches the system prompt from the database, falling back to the broader collaborator prompt."""
     if not email:
-        return "You are a helpful personal assistant."
+        return DEFAULT_COLLABORATOR_PROMPT
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
         if user and user.system_prompt:
             return user.system_prompt
-        return "You are a helpful personal assistant."
+        return DEFAULT_COLLABORATOR_PROMPT
     finally:
         db.close()
 
@@ -46,6 +57,23 @@ def store_vector(doc_id: str, text: str, user_email: str | None = None):
         db.commit()
     except Exception as e:
         print(f"Error storing vector: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def migrate_guest_vectors(guest_email: str, target_email: str):
+    """Reassigns guest vector embeddings to the claimed user account."""
+    if not guest_email or not target_email or guest_email == target_email:
+        return
+    db = SessionLocal()
+    try:
+        db.query(DocumentEmbedding).filter(DocumentEmbedding.user_email == guest_email).update(
+            {"user_email": target_email}, synchronize_session=False
+        )
+        db.commit()
+    except Exception as e:
+        print(f"Error migrating guest vectors: {e}")
         db.rollback()
     finally:
         db.close()

@@ -68,6 +68,7 @@ class User(Base):
     __tablename__ = "users"
     email = Column(String, primary_key=True)
     name = Column(String, nullable=False)
+    is_guest = Column(Boolean, default=False, index=True)
     primary_goal = Column(String, nullable=True)
     system_prompt = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
