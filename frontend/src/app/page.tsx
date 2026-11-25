@@ -3,31 +3,48 @@
 import { SessionProvider, useSession, signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Menu, Plus } from 'lucide-react';
-import Sidebar from '@/components/Sidebar';
-import ChatWorkspace from '@/components/ChatWorkspace';
+import { Menu, Plus, Sparkles, X } from 'lucide-react';
 import type { ChatSettings } from '@/components/Settings';
 import { DEFAULT_SETTINGS } from '@/components/Settings';
 import LoginCard from '@/components/LoginCard';
 import type { TourStepConfig } from '@/components/OnboardingTour';
 import { API_URL } from "@/lib/api";
 
+const Sidebar = dynamic(() => import('@/components/Sidebar'));
+const ChatWorkspace = dynamic(() => import('@/components/ChatWorkspace'));
 const MemoryManager = dynamic(() => import('@/components/MemoryManager'));
 const Settings = dynamic(() => import('@/components/Settings'));
 const Reminders = dynamic(() => import('@/components/Reminders'));
 const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
 
+const GUEST_STORAGE_KEY = 'life_assistant_guest_email';
+
+function getOrCreateGuestEmail(): string {
+  if (typeof window === 'undefined') return '';
+  let existing = localStorage.getItem(GUEST_STORAGE_KEY);
+  if (!existing) {
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    existing = `guest_${id}@guest.cignalpulse.local`;
+    localStorage.setItem(GUEST_STORAGE_KEY, existing);
+  }
+  return existing;
+}
+
 function AppContent() {
   const { data: session, status } = useSession();
 
+  const [guestEmail, setGuestEmail] = useState<string>('');
   const [hasGoal, setHasGoal] = useState(false);
-  const [primaryGoal, setPrimaryGoal] = useState("Assistant");
+  const [primaryGoal, setPrimaryGoal] = useState("Personal & Everyday Assistant");
   const [goalInput, setGoalInput] = useState("");
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [activeTourTarget, setActiveTourTarget] = useState<string | null>(null);
   const [starterPrompt, setStarterPrompt] = useState("");
+  const [authModalReason, setAuthModalReason] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'memory' | 'settings' | 'reminders'>('chat');
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
@@ -35,66 +52,90 @@ function AppContent() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const [chatSettings, setChatSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
 
-  const syncedEmailRef = useRef<string | null>(null);
-  const userEmail = session?.user?.email || '';
-  const userName = session?.user?.name || 'User';
+  const syncedIdentityRef = useRef<string | null>(null);
 
-  // Sync user with backend on login
+  const isAuthenticated = status === 'authenticated' && Boolean(session?.user?.email);
+  const isGuest = !isAuthenticated;
+  const activeEmail = isAuthenticated ? session!.user!.email! : guestEmail;
+  const activeName = isAuthenticated ? (session!.user!.name || 'User') : 'Guest';
+
+  // Initialize guest email on client when unauthenticated
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      setGuestEmail(getOrCreateGuestEmail());
+    }
+  }, [status]);
+
+  // Sync guest or authenticated user (and claim guest history on sign-in)
   useEffect(() => {
     if (status === 'loading') return;
+    if (!activeEmail) return;
 
-    if (!userEmail) {
-      syncedEmailRef.current = null;
-      setHasGoal(false);
-      setShowTour(false);
-      setActiveTourTarget(null);
-      setIsSyncing(false);
-      return;
-    }
-
-    if (syncedEmailRef.current === userEmail) return;
-    syncedEmailRef.current = userEmail;
+    if (syncedIdentityRef.current === activeEmail) return;
+    syncedIdentityRef.current = activeEmail;
     setIsSyncing(true);
 
     let cancelled = false;
 
     (async () => {
       try {
+        // 1. If user just signed in with Google and had a guest session, claim it first
+        if (isAuthenticated && typeof window !== 'undefined') {
+          const pendingGuestEmail = localStorage.getItem(GUEST_STORAGE_KEY);
+          if (pendingGuestEmail && pendingGuestEmail !== activeEmail) {
+            await fetch(`${API_URL}/api/auth/claim-guest`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                guest_email: pendingGuestEmail,
+                email: activeEmail,
+                name: activeName,
+              }),
+            });
+            localStorage.removeItem(GUEST_STORAGE_KEY);
+            setGuestEmail('');
+            setAuthModalReason(null);
+          }
+        }
+
+        // 2. Sync active profile (guest or real user)
         const res = await fetch(`${API_URL}/api/auth/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: userEmail,
-            name: userName,
+            email: activeEmail,
+            name: activeName,
           }),
         });
 
-        if (!res.ok) {
-          throw new Error(`Sync failed with status ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
 
         const data = await res.json();
         if (cancelled) return;
 
-        setHasGoal(Boolean(data.has_goal));
-        if (data.primary_goal) {
-          setPrimaryGoal(data.primary_goal);
+        // Guests skip the goal onboarding wall so they can test immediately
+        if (isGuest) {
+          setHasGoal(true);
+          if (data.primary_goal) setPrimaryGoal(data.primary_goal);
+        } else {
+          setHasGoal(Boolean(data.has_goal));
+          if (data.primary_goal) setPrimaryGoal(data.primary_goal);
         }
 
-        if (data.has_goal) {
-          const chatsRes = await fetch(
-            `${API_URL}/api/chats?user_email=${encodeURIComponent(userEmail)}`
-          );
-          if (chatsRes.ok) {
-            const chatsData = await chatsRes.json();
-            if (!cancelled) {
-              setChatSessions(Array.isArray(chatsData) ? chatsData : []);
-            }
+        // 3. Load chat history sessions
+        const chatsRes = await fetch(
+          `${API_URL}/api/chats?user_email=${encodeURIComponent(activeEmail)}`
+        );
+        if (chatsRes.ok) {
+          const chatsData = await chatsRes.json();
+          if (!cancelled) {
+            setChatSessions(Array.isArray(chatsData) ? chatsData : []);
           }
         }
       } catch (err) {
-        console.error('Auth sync error:', err);
-        syncedEmailRef.current = null;
+        console.error('Auth/Guest sync error:', err);
+        syncedIdentityRef.current = null;
+        if (isGuest) setHasGoal(true);
       } finally {
         if (!cancelled) {
           setIsSyncing(false);
@@ -105,20 +146,20 @@ function AppContent() {
     return () => {
       cancelled = true;
     };
-  }, [userEmail, userName, status]);
+  }, [activeEmail, activeName, isAuthenticated, isGuest, status]);
 
-  // Show guided tour once per user after goal setup
+  // Show guided tour once per user
   useEffect(() => {
-    if (!userEmail || !hasGoal || isSyncing) return;
-    const tourKey = `life_assistant_tour_seen_${userEmail}`;
+    if (!activeEmail || !hasGoal || isSyncing) return;
+    const tourKey = `life_assistant_tour_seen_${activeEmail}`;
     if (!localStorage.getItem(tourKey)) {
       setShowTour(true);
     }
-  }, [userEmail, hasGoal, isSyncing]);
+  }, [activeEmail, hasGoal, isSyncing]);
 
   const handleCompleteTour = () => {
-    if (userEmail) {
-      localStorage.setItem(`life_assistant_tour_seen_${userEmail}`, 'true');
+    if (activeEmail) {
+      localStorage.setItem(`life_assistant_tour_seen_${activeEmail}`, 'true');
     }
     setActiveTourTarget(null);
     setMobileMenuOpen(false);
@@ -132,15 +173,27 @@ function AppContent() {
     }
   };
 
+  const handleTabChange = (tab: 'chat' | 'memory' | 'settings' | 'reminders') => {
+    if (isGuest && (tab === 'reminders' || tab === 'memory')) {
+      setAuthModalReason(
+        tab === 'reminders'
+          ? 'Sign in with Google to schedule persistent reminders and notifications across devices.'
+          : 'Sign in with Google to save permanent personal notes, routines, and uploaded files.'
+      );
+      return;
+    }
+    setActiveTab(tab);
+  };
+
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userEmail || !goalInput.trim()) return;
+    if (!activeEmail || !goalInput.trim()) return;
 
     const res = await fetch(`${API_URL}/api/auth/goal`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: userEmail,
+        email: activeEmail,
         primary_goal: goalInput.trim(),
       }),
     });
@@ -176,7 +229,7 @@ function AppContent() {
     setCurrentSessionId(sessionId);
     setChatHistory([]);
     try {
-      const query = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : '';
+      const query = activeEmail ? `?user_email=${encodeURIComponent(activeEmail)}` : '';
       const res = await fetch(`${API_URL}/api/chats/${sessionId}${query}`);
       const data = await res.json();
       setChatHistory(Array.isArray(data) ? data : []);
@@ -192,7 +245,7 @@ function AppContent() {
     setActiveTab('chat');
   };
 
-  if (status === "loading" || (status === "authenticated" && isSyncing)) {
+  if (status === "loading" || isSyncing) {
     return (
       <main className="h-dvh bg-[#131314] flex items-center justify-center text-white">
         <div className="flex flex-col items-center gap-3">
@@ -203,19 +256,11 @@ function AppContent() {
     );
   }
 
-  if (!session) {
-    return (
-      <main className="h-dvh w-full bg-[#131314]">
-        <LoginCard />
-      </main>
-    );
-  }
-
-  if (!hasGoal) {
+  if (isAuthenticated && !hasGoal) {
     return (
       <main className="h-dvh bg-[#131314] flex items-center justify-center p-4">
         <form onSubmit={handleSaveGoal} className="bg-[#1e1f20] p-6 sm:p-8 rounded-xl w-full max-w-md space-y-4 border border-[#333537]">
-          <h2 className="text-white text-xl font-medium">Welcome, {userName}</h2>
+          <h2 className="text-white text-xl font-medium">Welcome, {activeName}</h2>
           <p className="text-sm text-[#c4c7c5]">What is your primary goal for this assistant?</p>
           <input
             type="text"
@@ -236,19 +281,44 @@ function AppContent() {
   return (
     <main className="h-dvh w-full bg-[#131314] text-[#e3e3e3] flex overflow-hidden">
       <Sidebar
-        profile={{ user_name: userName, user_email: userEmail, primary_goal: primaryGoal }}
+        profile={{ user_name: activeName, user_email: activeEmail, primary_goal: primaryGoal }}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         onNewChat={handleNewChat}
         chatSessions={chatSessions}
         currentSessionId={currentSessionId}
         onSelectSession={handleSelectSession}
-        onLogout={() => signOut()}
+        onLogout={() => {
+          if (isGuest) {
+            setAuthModalReason('Sign in with Google to save your chats and unlock reminders & personal memory.');
+          } else {
+            signOut();
+          }
+        }}
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
         activeTourTarget={activeTourTarget}
       />
       <section className="flex-1 min-w-0 flex flex-col h-full bg-[#131314] relative overflow-hidden">
+        {/* Guest Mode Top Banner */}
+        {isGuest && (
+          <div className="bg-[#1e1f20] border-b border-[#333537] px-3 py-1.5 flex items-center justify-between gap-2 text-xs shrink-0">
+            <span className="text-[#c4c7c5] truncate flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#a8c7fa] shrink-0" />
+              <span>Guest preview mode — sign in to keep your history permanently.</span>
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setAuthModalReason('Sign in with Google to keep your guest chat history and unlock reminders & memory.')
+              }
+              className="shrink-0 px-2.5 py-1 rounded-full bg-[#a8c7fa] hover:bg-[#8ab4f8] text-[#062e6f] font-medium transition"
+            >
+              Sign in
+            </button>
+          </div>
+        )}
+
         {/* Mobile Header */}
         <header className="flex items-center justify-between px-3 py-2.5 border-b border-[#333537] bg-[#1e1f20] md:hidden shrink-0">
           <button
@@ -260,7 +330,7 @@ function AppContent() {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
-            <span className="bg-[#a8c7fa] text-[#062e6f] px-1.5 py-0.5 rounded-full font-bold text-[10px]">AI</span>
+            <img src="/image.png" alt="Life Assistant" className="w-5 h-5 rounded-full object-cover" />
             <span className="text-sm font-medium text-white">Life Assistant</span>
           </div>
           <button
@@ -275,21 +345,24 @@ function AppContent() {
         </header>
 
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {activeTab === 'memory' && <MemoryManager userEmail={userEmail} />}
-          {activeTab === 'reminders' && <Reminders userName={userName} userEmail={userEmail} />}
+          {activeTab === 'memory' && <MemoryManager userEmail={activeEmail} />}
+          {activeTab === 'reminders' && <Reminders userName={activeName} userEmail={activeEmail} />}
           {activeTab === 'settings' && <Settings settings={chatSettings} setSettings={setChatSettings} />}
           {activeTab === 'chat' && (
             <ChatWorkspace
-              userName={userName}
-              userEmail={userEmail}
+              userName={activeName}
+              userEmail={activeEmail}
               chatHistory={chatHistory}
               setChatHistory={setChatHistory}
               sessionId={currentSessionId}
               setSessionId={setCurrentSessionId}
               initialPrompt={starterPrompt}
               onClearInitialPrompt={() => setStarterPrompt('')}
+              onGuestLimitReached={() =>
+                setAuthModalReason('You have used your free guest messages. Sign in with Google to continue and keep your conversation!')
+              }
               onMessageSent={async () => {
-                const query = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : '';
+                const query = activeEmail ? `?user_email=${encodeURIComponent(activeEmail)}` : '';
                 const res = await fetch(`${API_URL}/api/chats${query}`);
                 const data = await res.json();
                 if (Array.isArray(data)) setChatSessions(data);
@@ -299,6 +372,33 @@ function AppContent() {
           )}
         </div>
       </section>
+
+      {/* Soft Sign-In Modal for Gated Features / Guest Limit */}
+      {authModalReason && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/75 flex items-center justify-center p-4"
+          onClick={() => setAuthModalReason(null)}
+        >
+          <div
+            className="relative w-full max-w-md space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-[#1e1f20] border border-[#3b424c] px-4 py-2.5 text-xs text-[#c2e7ff]">
+              <span>{authModalReason}</span>
+              <button
+                type="button"
+                onClick={() => setAuthModalReason(null)}
+                className="p-1.5 rounded-lg bg-[#28292a] text-[#e3e3e3] hover:text-white hover:bg-[#333537] transition shrink-0"
+                aria-label="Close sign-in prompt"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <LoginCard compact />
+          </div>
+        </div>
+      )}
 
       {showTour && (
         <OnboardingTour
