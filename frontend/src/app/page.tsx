@@ -2,15 +2,20 @@
 
 import { SessionProvider, useSession, signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { Menu, Plus } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import ChatWorkspace from '@/components/ChatWorkspace';
-import MemoryManager from '@/components/MemoryManager';
-import Settings, { ChatSettings, DEFAULT_SETTINGS } from '@/components/Settings';
-import Reminders from '@/components/Reminders';
+import type { ChatSettings } from '@/components/Settings';
+import { DEFAULT_SETTINGS } from '@/components/Settings';
 import LoginCard from '@/components/LoginCard';
-import OnboardingTour, { TourStepConfig } from '@/components/OnboardingTour';
+import type { TourStepConfig } from '@/components/OnboardingTour';
 import { API_URL } from "@/lib/api";
+
+const MemoryManager = dynamic(() => import('@/components/MemoryManager'));
+const Settings = dynamic(() => import('@/components/Settings'));
+const Reminders = dynamic(() => import('@/components/Reminders'));
+const OnboardingTour = dynamic(() => import('@/components/OnboardingTour'), { ssr: false });
 
 function AppContent() {
   const { data: session, status } = useSession();
@@ -18,7 +23,7 @@ function AppContent() {
   const [hasGoal, setHasGoal] = useState(false);
   const [primaryGoal, setPrimaryGoal] = useState("Assistant");
   const [goalInput, setGoalInput] = useState("");
-  const [isSyncing, setIsSyncing] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [activeTourTarget, setActiveTourTarget] = useState<string | null>(null);
@@ -187,24 +192,28 @@ function AppContent() {
     setActiveTab('chat');
   };
 
-  if (status === "loading" || isSyncing) {
+  if (status === "loading" || (status === "authenticated" && isSyncing)) {
     return (
-      <div className="h-dvh bg-[#131314] flex items-center justify-center text-white">
-        <div className="animate-pulse flex flex-col items-center gap-3">
+      <main className="h-dvh bg-[#131314] flex items-center justify-center text-white">
+        <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-[#a8c7fa] text-[#062e6f] flex items-center justify-center font-bold">AI</div>
           <p className="text-sm text-[#c4c7c5]">Loading Assistant...</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (!session) {
-    return <LoginCard />;
+    return (
+      <main className="h-dvh w-full bg-[#131314]">
+        <LoginCard />
+      </main>
+    );
   }
 
   if (!hasGoal) {
     return (
-      <div className="h-dvh bg-[#131314] flex items-center justify-center p-4">
+      <main className="h-dvh bg-[#131314] flex items-center justify-center p-4">
         <form onSubmit={handleSaveGoal} className="bg-[#1e1f20] p-6 sm:p-8 rounded-xl w-full max-w-md space-y-4 border border-[#333537]">
           <h2 className="text-white text-xl font-medium">Welcome, {userName}</h2>
           <p className="text-sm text-[#c4c7c5]">What is your primary goal for this assistant?</p>
@@ -220,7 +229,7 @@ function AppContent() {
             Start Using Assistant
           </button>
         </form>
-      </div>
+      </main>
     );
   }
 

@@ -48,6 +48,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  // CHANGED: Added icons field to define the PWA and browser icons
+  icons: {
+    icon: "/icon.png", // Used as the main favicon (e.g., 32x32)
+    apple: "/icon.png", // Used for iOS add to home screen (e.g., 192x192)
+  },
+  // END CHANGED
   openGraph: {
     type: "website",
     locale: "en_US",

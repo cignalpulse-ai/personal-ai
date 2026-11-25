@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { Sparkles, ShieldCheck, CalendarClock, BrainCircuit, Loader2 } from 'lucide-react';
+import { ShieldCheck, CalendarClock, BrainCircuit, Loader2 } from 'lucide-react';
 
 export default function LoginCard() {
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -18,23 +18,24 @@ export default function LoginCard() {
   };
 
   return (
-    <div className="min-h-screen h-screen bg-[#131314] text-[#e3e3e3] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-dvh w-full bg-[#131314] text-[#e3e3e3] flex items-center justify-center p-4 relative overflow-hidden">
       {/* Subtle ambient glow */}
       <div
+        aria-hidden="true"
         className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[520px] h-[280px] rounded-full opacity-20 blur-3xl"
         style={{ background: 'radial-gradient(circle, #a8c7fa 0%, #004a77 55%, transparent 75%)' }}
       />
       <div
+        aria-hidden="true"
         className="pointer-events-none absolute -bottom-32 right-1/4 w-[380px] h-[240px] rounded-full opacity-10 blur-3xl"
         style={{ background: 'radial-gradient(circle, #8ab4f8 0%, transparent 70%)' }}
       />
 
-      {/* shadcn-style Card */}
-      <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#333537] bg-[#1e1f20]/95 backdrop-blur-md shadow-2xl p-7 space-y-6">
+      {/* Card */}
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#333537] bg-[#1e1f20] shadow-2xl p-7 space-y-6">
         {/* Top Badge + Heading */}
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#3b424c] bg-[#28292a] px-3 py-1 text-[11px] font-medium text-[#a8c7fa]">
-            {/* <Sparkles className="w-3.5 h-3.5" /> */}
             <span>Personal AI Workspace</span>
           </div>
 
