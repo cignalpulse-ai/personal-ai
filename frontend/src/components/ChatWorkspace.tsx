@@ -295,6 +295,7 @@ export default function ChatWorkspace({
     const isBrandNewSession = !sessionId;
     let currentAnswer = "";
     let assistantAdded = false;
+    let streamErrorMessage = "";
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -318,6 +319,11 @@ export default function ChatWorkspace({
           timezone: userTimezone,
         }),
       });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
 
       if (!res.body) throw new Error("No response body");
 
@@ -378,12 +384,19 @@ export default function ChatWorkspace({
 
               if (data.error) {
                 console.error("Stream error:", data.error);
+                streamErrorMessage = String(data.error);
               }
 
               if (data.done) {
                 setLoading(false);
                 abortControllerRef.current = null;
                 queueSpeech("", true);
+                if (!currentAnswer && streamErrorMessage) {
+                  setChatHistory((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: `Error communicating with the server (${streamErrorMessage}).` },
+                  ]);
+                }
                 if (isBrandNewSession) onMessageSent();
               }
             } catch (e) {
@@ -397,8 +410,12 @@ export default function ChatWorkspace({
         setLoading(false);
         return;
       }
-      console.error(err);
-      setChatHistory((prev) => [...prev, { role: 'assistant', content: 'Error communicating with the server.' }]);
+      console.error("Chat request failed:", err);
+      const detail = err?.message ? ` (${err.message})` : '';
+      setChatHistory((prev) => [
+        ...prev,
+        { role: 'assistant', content: `Error communicating with the server.${detail}` },
+      ]);
       setLoading(false);
     } finally {
       abortControllerRef.current = null;
